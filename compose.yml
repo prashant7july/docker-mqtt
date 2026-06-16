@@ -1,15 +1,19 @@
 services:
+
   mosquitto:
     build:
       context: .
     image: custom-mosquitto:latest
     restart: unless-stopped
+
     ports:
       - "${MQTT_PORT}:${MQTT_PORT}"
       - "${WEBSOCKET_PORT}:${WEBSOCKET_PORT}"
+
     volumes:
       - ./certs:/mosquitto/certs
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+
     environment:
       - USERNAME
       - PASSWORD
@@ -17,3 +21,23 @@ services:
       - LOG_TYPE=${LOG_TYPE}
       - MQTT_PORT=${MQTT_PORT}
       - WEBSOCKET_PORT=${WEBSOCKET_PORT}
+
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-p", "${MQTT_PORT:-8883}", "-t", "#", "-C", "1", "--quiet"]
+      interval: 15s
+      timeout: 8s
+      retries: 5
+      start_period: 20s
+
+
+  mqttx-web:
+    image: emqx/mqttx-web:latest
+    container_name: mqttx-web
+    restart: unless-stopped
+
+    ports:
+      - "8888:80"
+
+    depends_on:
+      mosquitto:
+        condition: service_healthy

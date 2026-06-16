@@ -1,4 +1,5 @@
-FROM eclipse-mosquitto:2.0.18-openssl
+# FROM eclipse-mosquitto:2.0.18-openssl
+FROM eclipse-mosquitto:openssl
 
 # Install necessary packages
 RUN apk update && apk add --no-cache openssl bash gettext

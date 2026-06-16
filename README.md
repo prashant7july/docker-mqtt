@@ -1,5 +1,6 @@
 # Secure Mosquitto MQTT Broker with Docker
 
+* [docker-mqtt](https://github.com/ericwastaken/docker-mqtt.git)
 An open-source project to deploy a secure [Eclipse Mosquitto](https://mosquitto.org/) MQTT broker using Docker and Docker Compose. This setup includes SSL/TLS encryption, user authentication, dynamic configuration via environment variables, and supports MQTT over WebSockets.
 
 ## Features
@@ -272,3 +273,90 @@ This project is licensed under the [MIT License](LICENSE).
 ---
 
 **Disclaimer**: This project is provided as-is without any warranties. Use at your own risk.
+
+Repo uses a **custom Dockerfile** (not plain `eclipse-mosquitto`), generates certs automatically, and uses env vars. Now I'll build the complete quick-start with your `mqttx-web` addition and TLS web client instructions:---
+
+## Quick Start
+
+```sh
+docker stop $(docker ps -qa)
+docker rm $(docker ps -qa)
+docker volume rm $(docker volume ls -q)
+docker rmi $(docker images -qa)
+
+# 1. Clone
+git clone https://github.com/ericwastaken/docker-mqtt.git
+cd docker-mqtt
+
+# 2. Create your .env  (copy the template)
+cp env.template .env
+# Edit .env — set USERNAME, PASSWORD, HOSTNAME=localhost
+
+# 3. Drop in the compose file above (replaces compose.yml)
+#    OR merge the mqttx-web block into their existing compose.yml
+
+grep -E "allow_anonymous|password_file" mosquitto.conf
+## If it says allow_anonymous false, change it to true and remove the password_file line, then:
+
+# 4. No .env needed — just start
+docker compose up -d --build
+
+# 5. Watch until healthy
+docker inspect mqttx-web --format='{{.State.StartedAt}}'
+docker inspect mosquitto --format='{{.State.Health.Status}}'
+
+# 6. Open MQTTX Web
+#    http://localhost:8888
+```
+
+---
+
+## Testing TLS in MQTTX Web browser client
+
+The broker only has **TLS ports** (8883 MQTTS, 9443 WSS). MQTTX Web connects via **WSS** from the browser.
+
+**Step 1 — Get the CA cert** (auto-generated in `./certs/`):
+```bash
+cat ./certs/ca.crt   # copy this content
+```
+
+**Step 2 — Open http://localhost:8888 and create a new connection:**
+
+| Field | Value |
+|-------|-------|
+| Protocol | `wss://` |
+| Host | `localhost` |
+| Port | `9443` |
+| Path | `/` |
+| Username | value from your `.env` |
+| Password | value from your `.env` |
+| SSL/TLS | ✅ Enable |
+| CA File | upload `./certs/ca.crt` |
+| Client Cert | ❌ Not required |
+| Strict validate cert | ❌ Off (self-signed) |
+
+**Step 3 — Subscribe + publish:**
+```
+Subscribe: test/#
+Publish:   test/hello  →  {"msg": "hello TLS"}
+```
+
+**Test from terminal too:**
+```bash
+mosquitto_pub \
+  -h localhost -p 8883 \
+  --cafile ./certs/ca.crt \
+  -u "$USERNAME" -P "$PASSWORD" \
+  -t test/hello -m '{"msg":"from terminal"}'
+```
+
+> **Why WSS (9443) for the browser, not MQTTS (8883)?** Browsers cannot open raw TCP sockets — they can only do HTTP/WebSocket. So browser clients always use WSS. Native IoT devices (ESP32, mobile apps) use MQTTS on 8883.
+
+https://shawnhymel.com/3085/how-to-use-the-mosquitto-mqtt-broker-with-ssl-tls/
+
+Problem 1: No CA File upload in MQTTX Web
+
+MQTTX Web (browser-based) often doesn't support CA file uploads due to browser security restrictions. You have two options:
+
+Use the MQTTX desktop app instead, which fully supports CA file uploads
+Disable strict cert validation (which you've already done with ❌ Off) — but you still need to handle the self-signed cert differently

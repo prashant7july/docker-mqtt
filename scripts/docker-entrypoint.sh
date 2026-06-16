@@ -8,14 +8,18 @@ if [ ! -f "/mosquitto/certs/server.crt" ] || [ ! -f "/mosquitto/certs/server.key
     /usr/local/bin/generate-self-signed-certs.sh
 fi
 
-# Generate password file if it doesn't exist
-if [ ! -f "/mosquitto/password/passwd" ]; then
-    echo "Creating password file..."
-    mkdir -p /mosquitto/password
+# Generate password file only if credentials are provided
+if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
+    if [ ! -f "/mosquitto/password/passwd" ]; then
+        echo "Creating password file..."
+        mkdir -p /mosquitto/password
+    else
+        echo "Overwriting password file..."
+    fi
+    mosquitto_passwd -b -c /mosquitto/password/passwd "$USERNAME" "$PASSWORD"
 else
-    echo "Overwriting password file..."
+    echo "No credentials provided, skipping password file generation (anonymous access)."
 fi
-mosquitto_passwd -b -c /mosquitto/password/passwd "$USERNAME" "$PASSWORD"
 
 # Ensure proper permissions
 chown -R mosquitto:mosquitto /mosquitto
